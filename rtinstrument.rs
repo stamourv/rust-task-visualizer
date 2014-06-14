@@ -130,8 +130,9 @@ impl<R: 'static + Runtime + Send> Runtime for InstrumentedRuntime<R> {
 
     fn reawaken(mut ~self, to_wake: Box<Task>) {
         // TODO: log which task awoke which task?
-        self.inner.take().unwrap().yield_now(to_wake);
-        self.put("test")
+        self.log("deschedule");
+        self.inner.take().unwrap().reawaken(to_wake);
+        self.put("wakeup")
     }
 
     fn spawn_sibling(mut ~self,

@@ -56,7 +56,7 @@
     ["after-spawn"  '(start-work)]
     ["death"        '(complete)]
     ["yield"        '(sync)]
-    ["done-yield"   '(sync)]
+    ["done-yield"   '(start-work)]
     ["maybe-yield"  '(sync)]
     ["deschedule"   '(sync)]
     ["wakeup"       '(start-work)]))
