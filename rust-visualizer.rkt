@@ -34,7 +34,7 @@
     (indexed-future-event
      (next-index!)
      (future-event (match kind
-                     ['create creator] ; seems to be part of the protocol
+                     ['create (match creator [0 #f] [n n])] ; seems to be part of the protocol
                      [_ task-id])
                    thread-id
                    kind
