@@ -24,7 +24,7 @@
     ;; probably some random program output, ignore
     [_ '()]))
 
-;; build-indexed-events : integer? integer? integer? string?
+;; build-indexed-events : integer? integer? integer? integer? string?
 ;;                         -> (listof indexed-future-event?)
 ;; the index serves to disambiguate order in case of identical timestamps
 ;; (struct future-event (future-id proc-id action time prim-name user-data))
