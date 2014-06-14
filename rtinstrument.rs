@@ -128,12 +128,7 @@ impl<R: 'static + Runtime + Send> Runtime for InstrumentedRuntime<R> {
         self.put("wakeup")
     }
 
-    fn reawaken(mut ~self, to_wake: Box<Task>) {
-        // TODO: log which task awoke which task?
-        self.log("deschedule");
-        self.inner.take().unwrap().reawaken(to_wake);
-        self.put("wakeup")
-    }
+    fn reawaken(mut ~self, _to_wake: Box<Task>) { fail!("unimplemented") }
 
     fn spawn_sibling(mut ~self,
                      cur_task: Box<Task>,
@@ -155,15 +150,7 @@ impl<R: 'static + Runtime + Send> Runtime for InstrumentedRuntime<R> {
     fn local_io<'a>(&'a mut self) -> Option<rtio::LocalIo<'a>> {
         self.inner.get_mut_ref().local_io()
     }
-
-    fn stack_bounds(&self) -> (uint, uint) {
-        self.inner.get_ref().stack_bounds()
-    }
-
-    fn can_block(&self) -> bool {
-        self.inner.get_ref().can_block()
-    }
-
-    // FIXME: This is a serious code smell and this should not exist at all.
+    fn stack_bounds(&self) -> (uint, uint) { self.inner.get_ref().stack_bounds() }
+    fn can_block(&self) -> bool { self.inner.get_ref().can_block() }
     fn wrap(~self) -> Box<Any> { self as Box<Any> }
 }
