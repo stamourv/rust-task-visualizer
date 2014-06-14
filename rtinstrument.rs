@@ -21,6 +21,8 @@ pub struct Message {
     pub task_id: uint,
     /// OS thread that performed this event
     pub thread_id: uint,
+    /// Creator task of this thread (zero if not relevant)
+    pub creator: uint,
     /// Short string description of the event that happened
     pub desc: String,
 }
@@ -33,7 +35,7 @@ struct InstrumentedRuntime<R> {
 /// Instrument all code run inside the specific block, returning a vector of all
 /// messages which occurred.
 pub fn instrument<R: 'static + Runtime + Send>(f: ||) -> Vec<Message> {
-    install::<R>(Arc::new(Exclusive::new(Vec::new())));
+    install::<R>(Arc::new(Exclusive::new(Vec::new())), 0);
     f();
     let rt = uninstall::<R>();
     unsafe { rt.messages.lock().clone() }
@@ -43,14 +45,16 @@ pub fn instrument<R: 'static + Runtime + Send>(f: ||) -> Vec<Message> {
 /// messages.
 ///
 /// The instrumented runtime is installed into the current task.
-fn install<R: 'static + Runtime + Send>(messages: Arc<Exclusive<Vec<Message>>>) {
+fn install<R: 'static + Runtime + Send>(
+    messages: Arc<Exclusive<Vec<Message>>>, creator: uint
+) {
     let mut task = Local::borrow(None::<Task>);
-    let mut rt = task.maybe_take_runtime::<R>().unwrap();
+    let rt = task.maybe_take_runtime::<R>().unwrap();
     let mut new_rt = box InstrumentedRuntime {
         inner: Some(rt),
         messages: messages
     };
-    new_rt.log("spawn");
+    new_rt.log2("spawn", creator);
     task.put_runtime(new_rt);
 }
 
@@ -79,15 +83,22 @@ impl<R: 'static + Runtime + Send>  InstrumentedRuntime<R> {
 
     /// Logs a message into this runtime
     fn log(&mut self, msg: &str) {
+        self.log2(msg, 0)
+    }
+    /// Logs a longer message
+    fn log2(&mut self, msg: &str, creator: uint) {
         let id = self.thread_id();
         let mut messages = unsafe { self.messages.lock() };
         messages.push(Message {
             timestamp: time::precise_time_ns(),
             desc: msg.to_str(),
-            task_id: self as *mut _ as uint,
+            task_id: self.task_id(),
             thread_id: id,
+            creator: creator,
         });
     }
+
+    fn task_id(&self) -> uint { self as *_ as uint }
 
     fn thread_id(&mut self) -> uint {
         self.inner.get_mut_ref().local_io().map(|mut i| {
@@ -130,9 +141,10 @@ impl<R: 'static + Runtime + Send> Runtime for InstrumentedRuntime<R> {
         // Be sure to install an instrumented runtime for the spawned sibling by
         // specifying a new runtime.
         let messages = self.messages.clone();
+        let me = self.task_id();
         self.log("before-spawn");
         self.inner.take().unwrap().spawn_sibling(cur_task, opts, proc() {
-            install::<R>(messages);
+            install::<R>(messages, me);
             f();
             drop(uninstall::<R>());
         });
