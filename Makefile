@@ -1,7 +1,8 @@
 RUSTC := rustc
 BUILD := build
 LIB := $(BUILD)/$(shell $(RUSTC) --crate-file-name rtinstrument.rs)
-TESTS := foo msgsend-pipes-shared msgsend-ring-mutex-arcs
+TESTS := foo msgsend-pipes-shared msgsend-ring-mutex-arcs \
+	shootout-threadring
 TESTS := $(TESTS:%=$(BUILD)/%)
 
 all: $(TESTS)
