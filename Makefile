@@ -13,7 +13,5 @@ $(LIB): rtinstrument.rs
 $(TESTS): $(BUILD)/%: %.rs $(LIB)
 	$(RUSTC) $< --out-dir $(@D) -L $(BUILD)
 
-# all:
-# 	rustc rtinstrument.rs
-# 	rustc foo.rs -L .
-# 	./foo | racket rust-visualizer.rkt &
+clean:
+	rm -rf build
