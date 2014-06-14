@@ -3,7 +3,7 @@
 (require future-visualizer future-visualizer/trace)
 
 (define log-regexp
-  "^Message { timestamp: ([0-9]+), task_id: ([0-9]+), thread_id: ([0-9]+), desc: (.+) }")
+  "^Message { timestamp: ([0-9]+), task_id: ([0-9]+), thread_id: ([0-9]+), creator: ([0-9]+), desc: (.+) }")
 
 (define index 0)
 (define (next-index!) (begin0 index (set! index (add1 index))))
@@ -12,14 +12,15 @@
 ;; maybe generate 0, 1 or more future events from one rust event
 (define (parse-event s)
   (match (regexp-match log-regexp s)
-    [(list _ timestamp-string task-id-string thread-id-string desc)
+    [(list _ timestamp-string task-id-string thread-id-string creator-string desc)
      (define timestamp (/ (string->number timestamp-string)
                           ;; to be on the same scale as future timestamps
                           1000000.0))
      (define task-id   (string->number task-id-string))
      (define thread-id (string->number thread-id-string))
+     (define creator   (string->number creator-string))
      (and timestamp task-id thread-id
-          (build-indexed-events timestamp task-id thread-id desc))]
+          (build-indexed-events timestamp task-id thread-id creator desc))]
     ;; probably some random program output, ignore
     [_ '()]))
 
@@ -27,13 +28,13 @@
 ;;                         -> (listof indexed-future-event?)
 ;; the index serves to disambiguate order in case of identical timestamps
 ;; (struct future-event (future-id proc-id action time prim-name user-data))
-(define (build-indexed-events timestamp task-id thread-id desc)
+(define (build-indexed-events timestamp task-id thread-id creator desc)
   (define kinds (desc->kinds desc))
   (define (make kind)
     (indexed-future-event
      (next-index!)
      (future-event (match kind
-                     ['create #f] ; seems to be part of the protocol
+                     ['create creator] ; seems to be part of the protocol
                      [_ task-id])
                    thread-id
                    kind
