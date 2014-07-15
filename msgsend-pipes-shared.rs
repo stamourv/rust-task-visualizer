@@ -67,22 +67,20 @@ fn run(args: &[String]) {
     let mut worker_results = Vec::new();
     for _ in range(0u, workers) {
         let to_child = to_child.clone();
-        let mut builder = TaskBuilder::new();
-        worker_results.push(builder.future_result());
-        builder.spawn(proc() {
+        worker_results.push(TaskBuilder::new().try_future(proc() {
             for _ in range(0u, size / workers) {
                 //println!("worker {:?}: sending {:?} bytes", i, num_bytes);
                 to_child.send(Bytes(num_bytes));
             }
             //println!("worker {:?} exiting", i);
-        });
+        }));
     }
     task::spawn(proc() {
         server(&from_parent, &to_parent);
     });
 
-    for r in worker_results.iter() {
-        r.recv().unwrap();
+    for r in worker_results.move_iter() {
+        r.unwrap().ok().unwrap();
     }
 
     //println!("sending stop message");
@@ -115,7 +113,7 @@ fn main() {
 green_start!(real_main)
 
 fn real_main() {
-    let msgs = rtinstrument::instrument::<green::task::GreenTask>(main);
+    let msgs = rtinstrument::instrument(main);
 
     for msg in msgs.iter() {
         println!("{}", msg);

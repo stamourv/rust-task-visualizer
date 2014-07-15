@@ -109,7 +109,7 @@ fn main() {
 green_start!(real_main)
 
 fn real_main() {
-    let msgs = rtinstrument::instrument::<green::task::GreenTask>(main);
+    let msgs = rtinstrument::instrument(main);
 
     for msg in msgs.iter() {
         println!("{}", msg);

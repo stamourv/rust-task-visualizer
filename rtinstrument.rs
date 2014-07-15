@@ -27,17 +27,17 @@ pub struct Message {
     pub desc: String,
 }
 
-struct InstrumentedRuntime<R> {
-    inner: Option<Box<R>>,
+struct InstrumentedRuntime {
+    inner: Option<Box<Runtime + Send>>,
     messages: Arc<Exclusive<Vec<Message>>>,
 }
 
 /// Instrument all code run inside the specific block, returning a vector of all
 /// messages which occurred.
-pub fn instrument<R: 'static + Runtime + Send>(f: ||) -> Vec<Message> {
-    install::<R>(Arc::new(Exclusive::new(Vec::new())), 0);
+pub fn instrument(f: ||) -> Vec<Message> {
+    install(Arc::new(Exclusive::new(Vec::new())), 0);
     f();
-    let rt = uninstall::<R>();
+    let rt = uninstall();
     unsafe { rt.messages.lock().clone() }
 }
 
@@ -45,11 +45,9 @@ pub fn instrument<R: 'static + Runtime + Send>(f: ||) -> Vec<Message> {
 /// messages.
 ///
 /// The instrumented runtime is installed into the current task.
-fn install<R: 'static + Runtime + Send>(
-    messages: Arc<Exclusive<Vec<Message>>>, creator: uint
-) {
+fn install(messages: Arc<Exclusive<Vec<Message>>>, creator: uint) {
     let mut task = Local::borrow(None::<Task>);
-    let rt = task.maybe_take_runtime::<R>().unwrap();
+    let rt = task.take_runtime();
     let mut new_rt = box InstrumentedRuntime {
         inner: Some(rt),
         messages: messages
@@ -60,21 +58,21 @@ fn install<R: 'static + Runtime + Send>(
 
 /// Uninstalls the runtime from the current task, returning the instrumented
 /// runtime.
-fn uninstall<R: 'static + Runtime + Send>() -> InstrumentedRuntime<R> {
+fn uninstall() -> InstrumentedRuntime {
     let mut task = Local::borrow(None::<Task>);
-    let mut rt = task.maybe_take_runtime::<InstrumentedRuntime<R>>().unwrap();
+    let mut rt = task.maybe_take_runtime::<InstrumentedRuntime>().unwrap();
     rt.log("death");
     task.put_runtime(rt.inner.take().unwrap());
     *rt
 }
 
-impl<R: 'static + Runtime + Send>  InstrumentedRuntime<R> {
+impl  InstrumentedRuntime {
     /// Puts this runtime back into the local task
     fn put(mut ~self, msg: &str) {
         assert!(self.inner.is_none());
 
         let mut task: Box<Task> = Local::take();
-        let rt = task.maybe_take_runtime::<R>().unwrap();
+        let rt = task.take_runtime();
         self.inner = Some(rt);
         self.log(msg);
         task.put_runtime(self);
@@ -91,14 +89,14 @@ impl<R: 'static + Runtime + Send>  InstrumentedRuntime<R> {
         let mut messages = unsafe { self.messages.lock() };
         messages.push(Message {
             timestamp: time::precise_time_ns(),
-            desc: msg.to_str(),
+            desc: msg.to_string(),
             task_id: self.task_id(),
             thread_id: id,
             creator: creator,
         });
     }
 
-    fn task_id(&self) -> uint { self as *_ as uint }
+    fn task_id(&self) -> uint { self as *const _ as uint }
 
     fn thread_id(&mut self) -> uint {
         self.inner.get_mut_ref().local_io().map(|mut i| {
@@ -108,7 +106,7 @@ impl<R: 'static + Runtime + Send>  InstrumentedRuntime<R> {
     }
 }
 
-impl<R: 'static + Runtime + Send> Runtime for InstrumentedRuntime<R> {
+impl Runtime for InstrumentedRuntime {
     fn yield_now(mut ~self, cur_task: Box<Task>) {
         self.log("yield");
         self.inner.take().unwrap().yield_now(cur_task);
@@ -128,7 +126,7 @@ impl<R: 'static + Runtime + Send> Runtime for InstrumentedRuntime<R> {
         self.put("wakeup")
     }
 
-    fn reawaken(mut ~self, _to_wake: Box<Task>) { fail!("unimplemented") }
+    fn reawaken(~self, _to_wake: Box<Task>) { fail!("unimplemented") }
 
     fn spawn_sibling(mut ~self,
                      cur_task: Box<Task>,
@@ -140,9 +138,9 @@ impl<R: 'static + Runtime + Send> Runtime for InstrumentedRuntime<R> {
         let me = self.task_id();
         self.log("before-spawn");
         self.inner.take().unwrap().spawn_sibling(cur_task, opts, proc() {
-            install::<R>(messages, me);
+            install(messages, me);
             f();
-            drop(uninstall::<R>());
+            drop(uninstall());
         });
         self.put("after-spawn")
     }
